@@ -166,9 +166,68 @@
     }
 
     .btn-clear:hover { background: #3a1010; border-color: #e05555; }
+
+    .login-overlay {
+      position: fixed;
+      inset: 0;
+      background: #0f0f0f;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .login-box {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 40px;
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .login-box h2 { font-size: 18px; font-weight: 600; text-align: center; }
+
+    .login-box input {
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      background: #2a2a2a;
+      color: #f0f0f0;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .login-box input:focus { border-color: #555; }
+
+    .login-box button {
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      background: #2563eb;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .login-box button:hover { background: #1d4ed8; }
+    .login-error { color: #e05555; font-size: 13px; text-align: center; min-height: 18px; }
   </style>
 </head>
 <body>
+  {% if not authenticated %}
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+      <h2>AI Playground</h2>
+      <input type="password" id="passwordInput" placeholder="Enter password" />
+      <button id="loginBtn">Enter</button>
+      <div class="login-error" id="loginError"></div>
+    </div>
+  </div>
+  {% endif %}
+
   <header>
     <h1>AI Playground</h1>
     <div class="tabs">
@@ -268,6 +327,21 @@
 
     sendBtn.addEventListener("click", send);
     input.addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+
+    const loginBtn = document.getElementById("loginBtn");
+    if (loginBtn) {
+      async function doLogin() {
+        const pwd = document.getElementById("passwordInput").value;
+        const res = await fetch("/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: pwd }) });
+        if (res.ok) {
+          document.getElementById("loginOverlay").remove();
+        } else {
+          document.getElementById("loginError").textContent = "Wrong password.";
+        }
+      }
+      loginBtn.addEventListener("click", doLogin);
+      document.getElementById("passwordInput").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+    }
 
     document.getElementById("clear").addEventListener("click", async () => {
       if (!confirm("Delete all chats and images?")) return;

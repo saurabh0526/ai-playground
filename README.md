@@ -23,7 +23,11 @@ A simple web app to chat with GPT-4o, Claude, and generate images with DALL-E 3.
    pip install -r requirements.txt
    ```
 
-3. Set your API keys:
+3. Get your API keys:
+   - **OpenAI** → [platform.openai.com/api-keys](https://platform.openai.com/api-keys) → click **Create new secret key**
+   - **Anthropic** → [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys) → click **Create Key**
+
+   Then set them in your terminal:
    ```bash
    export OPENAI_API_KEY=your_openai_key
    export ANTHROPIC_API_KEY=your_anthropic_key

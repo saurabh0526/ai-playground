@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Playground</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 16px 24px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    header h1 { font-size: 18px; font-weight: 600; }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-left: auto;
+    }
+
+    .tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid #333;
+      background: transparent;
+      color: #aaa;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+
+    .tab.active {
+      background: #333;
+      color: #fff;
+      border-color: #555;
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 24px;
+    }
+
+    .content-wrap {
+      width: 100%;
+      max-width: 680px;
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - 80px);
+    }
+
+    .chat-container {
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-bottom: 16px;
+    }
+
+    .message {
+      max-width: 700px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      line-height: 1.6;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
+    .message.user {
+      background: #1e3a5f;
+      align-self: flex-end;
+    }
+
+    .message.bot {
+      background: #1e1e1e;
+      align-self: flex-start;
+      border: 1px solid #2a2a2a;
+    }
+
+    .message.bot img {
+      max-width: 400px;
+      border-radius: 8px;
+      margin-top: 8px;
+      display: block;
+    }
+
+    .message .label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      color: #888;
+    }
+
+    .input-area {
+      padding: 8px 0 0;
+      display: flex;
+      justify-content: center;
+    }
+
+    .input-inner {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .input-area input {
+      flex: 1;
+      padding: 12px 20px;
+      border-radius: 24px;
+      border: 1px solid #333;
+      background: #2a2a2a;
+      color: #f0f0f0;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .input-area input:focus { border-color: #555; }
+
+    .input-area button {
+      padding: 12px 24px;
+      border-radius: 24px;
+      border: none;
+      background: #2563eb;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    .input-area button:hover { background: #1d4ed8; }
+    .input-area button:disabled { background: #333; cursor: not-allowed; }
+
+    .loading { color: #666; font-style: italic; font-size: 13px; }
+
+    .btn-clear {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid #5a2020;
+      background: transparent;
+      color: #e05555;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+      margin-left: 8px;
+    }
+
+    .btn-clear:hover { background: #3a1010; border-color: #e05555; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AI Playground</h1>
+    <div class="tabs">
+      <button class="tab active" data-mode="gpt">GPT-4o</button>
+      <button class="tab" data-mode="claude">Claude</button>
+      <button class="tab" data-mode="image">Image Gen</button>
+    </div>
+    <button class="btn-clear" id="clear">Clear all</button>
+  </header>
+
+  <main class="main">
+    <div class="content-wrap">
+      <div class="chat-container" id="chat"></div>
+      <div class="input-area">
+        <div class="input-inner">
+          <input type="text" id="input" placeholder="Type a message..." />
+          <button id="send">Send</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Trigger cleanup of old images on page load
+    fetch("/cleanup", { method: "POST" }).catch(() => {});
+
+    let mode = "gpt";
+
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("input");
+    const sendBtn = document.getElementById("send");
+
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        mode = tab.dataset.mode;
+        input.placeholder = mode === "image" ? "Describe an image..." : "Type a message...";
+      });
+    });
+
+    function addMessage(text, sender, isImage = false) {
+      const div = document.createElement("div");
+      div.className = `message ${sender}`;
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = sender === "user" ? "You" : mode === "gpt" ? "GPT-4o" : mode === "claude" ? "Claude" : "DALL-E 3";
+      div.appendChild(label);
+      if (isImage) {
+        const img = document.createElement("img");
+        img.src = text;
+        div.appendChild(img);
+      } else {
+        div.appendChild(document.createTextNode(text));
+      }
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      addMessage(text, "user");
+      input.value = "";
+      sendBtn.disabled = true;
+
+      const loading = addMessage("Thinking...", "bot");
+      loading.querySelector("div").nextSibling?.remove();
+      loading.appendChild(Object.assign(document.createElement("span"), { className: "loading", textContent: "Thinking..." }));
+
+      try {
+        let res, data;
+        if (mode === "gpt") {
+          res = await fetch("/chat/gpt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
+          data = await res.json();
+          loading.innerHTML = `<div class="label">GPT-4o</div>`;
+          loading.appendChild(document.createTextNode(data.reply));
+        } else if (mode === "claude") {
+          res = await fetch("/chat/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
+          data = await res.json();
+          loading.innerHTML = `<div class="label">Claude</div>`;
+          loading.appendChild(document.createTextNode(data.reply));
+        } else {
+          res = await fetch("/image/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: text }) });
+          data = await res.json();
+          loading.innerHTML = `<div class="label">DALL-E 3</div>`;
+          const img = document.createElement("img");
+          img.src = data.url;
+          loading.appendChild(img);
+        }
+      } catch (e) {
+        loading.innerHTML = `<div class="label">Error</div>Something went wrong.`;
+      }
+
+      sendBtn.disabled = false;
+      input.focus();
+    }
+
+    sendBtn.addEventListener("click", send);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+
+    document.getElementById("clear").addEventListener("click", async () => {
+      if (!confirm("Delete all chats and images?")) return;
+      await fetch("/clear", { method: "POST" }).catch(() => {});
+      chat.innerHTML = "";
+    });
+  </script>
+</body>
+</html>

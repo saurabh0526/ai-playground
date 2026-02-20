@@ -42,14 +42,26 @@ def get_db():
 def init_db():
     conn, ph = get_db()
     try:
-        with conn:
-            conn.execute("""
+        if DATABASE_URL:
+            cur = conn.cursor()
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id TEXT PRIMARY KEY,
                     text TEXT NOT NULL,
                     timestamp REAL NOT NULL
                 )
             """)
+            conn.commit()
+            cur.close()
+        else:
+            with conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS messages (
+                        id TEXT PRIMARY KEY,
+                        text TEXT NOT NULL,
+                        timestamp REAL NOT NULL
+                    )
+                """)
     finally:
         conn.close()
 
@@ -116,17 +128,20 @@ def get_messages():
     cutoff = now - MESSAGE_TTL
     conn, ph = get_db()
     try:
-        with conn:
-            conn.execute(f"DELETE FROM messages WHERE timestamp < {ph}", (cutoff,))
-            if DATABASE_URL:
-                cur = conn.cursor()
-                cur.execute("SELECT id, text, timestamp FROM messages ORDER BY timestamp DESC")
-                rows = cur.fetchall()
-                return jsonify([{
-                    "id": r[0], "text": r[1], "timestamp": r[2],
-                    "expires_in": max(0, int(MESSAGE_TTL - (now - r[2])))
-                } for r in rows])
-            else:
+        if DATABASE_URL:
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM messages WHERE timestamp < {ph}", (cutoff,))
+            cur.execute("SELECT id, text, timestamp FROM messages ORDER BY timestamp DESC")
+            rows = cur.fetchall()
+            conn.commit()
+            cur.close()
+            return jsonify([{
+                "id": r[0], "text": r[1], "timestamp": r[2],
+                "expires_in": max(0, int(MESSAGE_TTL - (now - r[2])))
+            } for r in rows])
+        else:
+            with conn:
+                conn.execute(f"DELETE FROM messages WHERE timestamp < {ph}", (cutoff,))
                 rows = conn.execute("SELECT * FROM messages ORDER BY timestamp DESC").fetchall()
                 return jsonify([{
                     "id": r["id"], "text": r["text"], "timestamp": r["timestamp"],
@@ -148,11 +163,20 @@ def post_message():
 
     conn, ph = get_db()
     try:
-        with conn:
-            conn.execute(
+        if DATABASE_URL:
+            cur = conn.cursor()
+            cur.execute(
                 f"INSERT INTO messages (id, text, timestamp) VALUES ({ph}, {ph}, {ph})",
                 (str(uuid.uuid4()), text, time.time())
             )
+            conn.commit()
+            cur.close()
+        else:
+            with conn:
+                conn.execute(
+                    f"INSERT INTO messages (id, text, timestamp) VALUES ({ph}, {ph}, {ph})",
+                    (str(uuid.uuid4()), text, time.time())
+                )
     finally:
         conn.close()
     return jsonify({"status": "ok"})

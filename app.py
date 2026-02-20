@@ -82,7 +82,7 @@ def chat_gpt():
 
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": message}],
         )
         return jsonify({"reply": response.choices[0].message.content})

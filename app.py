@@ -1,48 +1,25 @@
 #!/usr/bin/env python3
 import os
-from functools import wraps
-from flask import Flask, request, jsonify, render_template, session
+from flask import Flask, request, jsonify, render_template
 import openai
 import anthropic
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24))
 
 limiter = Limiter(get_remote_address, app=app)
 
 openai_client = openai.OpenAI()
 anthropic_client = anthropic.Anthropic()
 
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
-
-
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if APP_PASSWORD and not session.get("authenticated"):
-            return jsonify({"error": "Unauthorized"}), 401
-        return f(*args, **kwargs)
-    return decorated
-
 
 @app.route("/")
 def index():
-    return render_template("index.html", authenticated=not APP_PASSWORD or session.get("authenticated", False))
-
-
-@app.route("/login", methods=["POST"])
-@limiter.limit("10 per minute")
-def login():
-    if request.json.get("password") == APP_PASSWORD:
-        session["authenticated"] = True
-        return jsonify({"status": "ok"})
-    return jsonify({"error": "Wrong password"}), 401
+    return render_template("index.html")
 
 
 @app.route("/chat/gpt", methods=["POST"])
-@login_required
 @limiter.limit("30 per minute")
 def chat_gpt():
     data = request.json
@@ -58,7 +35,6 @@ def chat_gpt():
 
 
 @app.route("/chat/claude", methods=["POST"])
-@login_required
 @limiter.limit("30 per minute")
 def chat_claude():
     data = request.json
@@ -75,13 +51,11 @@ def chat_claude():
 
 
 @app.route("/clear", methods=["POST"])
-@login_required
 def clear_all():
     return jsonify({"status": "ok"})
 
 
 @app.route("/image/generate", methods=["POST"])
-@login_required
 @limiter.limit("5 per minute")
 def generate_image():
     data = request.json

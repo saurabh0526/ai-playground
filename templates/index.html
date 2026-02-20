@@ -229,7 +229,6 @@
     <h1>AI Playground</h1>
     <div class="tabs">
       <button class="tab" data-mode="gpt">GPT-4o</button>
-      <button class="tab" data-mode="claude">Claude</button>
       <button class="tab" data-mode="image">Image Gen</button>
       <button class="tab wall-tab" data-mode="wall">The Wall</button>
     </div>
@@ -298,7 +297,7 @@
       div.className = `message ${sender}`;
       const label = document.createElement("div");
       label.className = "label";
-      label.textContent = sender === "user" ? "You" : mode === "gpt" ? "GPT-4o" : mode === "claude" ? "Claude" : "DALL-E 3";
+      label.textContent = sender === "user" ? "You" : mode === "gpt" ? "GPT-4o" : "DALL-E 3";
       div.appendChild(label);
       if (isImage) {
         const img = document.createElement("img");
@@ -329,11 +328,6 @@
           res = await fetch("/chat/gpt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
           data = await res.json();
           loading.innerHTML = `<div class="label">GPT-4o</div>`;
-          loading.appendChild(document.createTextNode(data.reply));
-        } else if (mode === "claude") {
-          res = await fetch("/chat/claude", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
-          data = await res.json();
-          loading.innerHTML = `<div class="label">Claude</div>`;
           loading.appendChild(document.createTextNode(data.reply));
         } else {
           res = await fetch("/image/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: text }) });

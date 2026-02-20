@@ -5,7 +5,6 @@ import uuid
 import sqlite3
 from flask import Flask, request, jsonify, render_template
 import openai
-import anthropic
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -14,7 +13,6 @@ app = Flask(__name__)
 limiter = Limiter(get_remote_address, app=app)
 
 openai_client = openai.OpenAI()
-anthropic_client = anthropic.Anthropic()
 
 MESSAGE_TTL = 7 * 24 * 60 * 60  # 7 days
 MAX_LENGTH = 280
@@ -88,21 +86,6 @@ def chat_gpt():
     )
     return jsonify({"reply": response.choices[0].message.content})
 
-
-@app.route("/chat/claude", methods=["POST"])
-@limiter.limit("30 per minute")
-def chat_claude():
-    data = request.json
-    message = data.get("message", "").strip()
-    if not message:
-        return jsonify({"error": "No message provided"}), 400
-
-    response = anthropic_client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": message}],
-    )
-    return jsonify({"reply": response.content[0].text})
 
 
 @app.route("/image/generate", methods=["POST"])

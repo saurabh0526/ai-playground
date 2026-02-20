@@ -16,7 +16,7 @@ limiter = Limiter(get_remote_address, app=app)
 openai_client = openai.OpenAI()
 anthropic_client = anthropic.Anthropic()
 
-MESSAGE_TTL = 3 * 60 * 60  # 3 hours
+MESSAGE_TTL = 7 * 24 * 60 * 60  # 7 days
 MAX_LENGTH = 280
 
 DATABASE_URL = os.environ.get("DATABASE_URL")  # set by Render automatically

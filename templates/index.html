@@ -253,7 +253,7 @@
   <div class="wall-view hidden" id="wallView">
     <div class="post-area">
       <div class="post-inner">
-        <textarea id="wallInput" placeholder="Say something... disappears in 3 hours." maxlength="280"></textarea>
+        <textarea id="wallInput" placeholder="Say something... disappears in 7 days." maxlength="280"></textarea>
         <div class="post-footer">
           <span class="char-count" id="charCount">280 left</span>
           <button id="postBtn">Post</button>
@@ -375,8 +375,10 @@
     });
 
     function formatExpiry(seconds) {
-      const h = Math.floor(seconds / 3600);
+      const d = Math.floor(seconds / 86400);
+      const h = Math.floor((seconds % 86400) / 3600);
       const m = Math.floor((seconds % 3600) / 60);
+      if (d > 0) return `${d}d ${h}h left`;
       if (h > 0) return `${h}h ${m}m left`;
       return `${m}m left`;
     }

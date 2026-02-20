@@ -12,7 +12,11 @@ app = Flask(__name__)
 
 limiter = Limiter(get_remote_address, app=app)
 
-openai_client = openai.OpenAI()
+try:
+    openai_client = openai.OpenAI()
+except Exception as e:
+    openai_client = None
+    print(f"Warning: OpenAI client failed to initialize: {e}")
 
 MESSAGE_TTL = 7 * 24 * 60 * 60  # 7 days
 MAX_LENGTH = 280
@@ -64,7 +68,10 @@ def init_db():
         conn.close()
 
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    print(f"Warning: DB init failed: {e}")
 
 
 @app.route("/")
@@ -79,6 +86,8 @@ def chat_gpt():
     message = data.get("message", "").strip()
     if not message:
         return jsonify({"error": "No message provided"}), 400
+    if not openai_client:
+        return jsonify({"error": "OpenAI not configured"}), 503
 
     try:
         response = openai_client.chat.completions.create(
@@ -103,6 +112,8 @@ def generate_image():
     prompt = data.get("prompt", "").strip()
     if not prompt:
         return jsonify({"error": "No prompt provided"}), 400
+    if not openai_client:
+        return jsonify({"error": "OpenAI not configured"}), 503
 
     try:
         response = openai_client.images.generate(

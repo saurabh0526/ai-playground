@@ -2,7 +2,7 @@
 import os
 import time
 import uuid
-import threading
+import sqlite3
 from flask import Flask, request, jsonify, render_template
 import openai
 import anthropic
@@ -19,15 +19,42 @@ anthropic_client = anthropic.Anthropic()
 MESSAGE_TTL = 3 * 60 * 60  # 3 hours
 MAX_LENGTH = 280
 
-messages = []
-messages_lock = threading.Lock()
+DATABASE_URL = os.environ.get("DATABASE_URL")  # set by Render automatically
+DB_PATH = os.path.join(os.path.dirname(__file__), "wall.db")
+
+# Render gives postgres:// but psycopg2 needs postgresql://
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 
-def get_active_messages():
-    now = time.time()
-    with messages_lock:
-        messages[:] = [m for m in messages if now - m["timestamp"] < MESSAGE_TTL]
-        return sorted(messages, key=lambda m: m["timestamp"], reverse=True)
+def get_db():
+    if DATABASE_URL:
+        import psycopg2
+        import psycopg2.extras
+        conn = psycopg2.connect(DATABASE_URL)
+        return conn, "%s"  # PostgreSQL placeholder
+    else:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        return conn, "?"   # SQLite placeholder
+
+
+def init_db():
+    conn, ph = get_db()
+    try:
+        with conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS messages (
+                    id TEXT PRIMARY KEY,
+                    text TEXT NOT NULL,
+                    timestamp REAL NOT NULL
+                )
+            """)
+    finally:
+        conn.close()
+
+
+init_db()
 
 
 @app.route("/")
@@ -86,13 +113,27 @@ def generate_image():
 @app.route("/messages", methods=["GET"])
 def get_messages():
     now = time.time()
-    active = get_active_messages()
-    return jsonify([{
-        "id": m["id"],
-        "text": m["text"],
-        "timestamp": m["timestamp"],
-        "expires_in": max(0, int(MESSAGE_TTL - (now - m["timestamp"])))
-    } for m in active])
+    cutoff = now - MESSAGE_TTL
+    conn, ph = get_db()
+    try:
+        with conn:
+            conn.execute(f"DELETE FROM messages WHERE timestamp < {ph}", (cutoff,))
+            if DATABASE_URL:
+                cur = conn.cursor()
+                cur.execute("SELECT id, text, timestamp FROM messages ORDER BY timestamp DESC")
+                rows = cur.fetchall()
+                return jsonify([{
+                    "id": r[0], "text": r[1], "timestamp": r[2],
+                    "expires_in": max(0, int(MESSAGE_TTL - (now - r[2])))
+                } for r in rows])
+            else:
+                rows = conn.execute("SELECT * FROM messages ORDER BY timestamp DESC").fetchall()
+                return jsonify([{
+                    "id": r["id"], "text": r["text"], "timestamp": r["timestamp"],
+                    "expires_in": max(0, int(MESSAGE_TTL - (now - r["timestamp"])))
+                } for r in rows])
+    finally:
+        conn.close()
 
 
 @app.route("/messages", methods=["POST"])
@@ -105,10 +146,15 @@ def post_message():
     if len(text) > MAX_LENGTH:
         return jsonify({"error": f"Max {MAX_LENGTH} characters"}), 400
 
-    msg = {"id": str(uuid.uuid4()), "text": text, "timestamp": time.time()}
-    with messages_lock:
-        messages.append(msg)
-
+    conn, ph = get_db()
+    try:
+        with conn:
+            conn.execute(
+                f"INSERT INTO messages (id, text, timestamp) VALUES ({ph}, {ph}, {ph})",
+                (str(uuid.uuid4()), text, time.time())
+            )
+    finally:
+        conn.close()
     return jsonify({"status": "ok"})
 
 

@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import os
+import time
+import uuid
+import threading
 from flask import Flask, request, jsonify, render_template
 import openai
 import anthropic
@@ -12,6 +15,19 @@ limiter = Limiter(get_remote_address, app=app)
 
 openai_client = openai.OpenAI()
 anthropic_client = anthropic.Anthropic()
+
+MESSAGE_TTL = 3 * 60 * 60  # 3 hours
+MAX_LENGTH = 280
+
+messages = []
+messages_lock = threading.Lock()
+
+
+def get_active_messages():
+    now = time.time()
+    with messages_lock:
+        messages[:] = [m for m in messages if now - m["timestamp"] < MESSAGE_TTL]
+        return sorted(messages, key=lambda m: m["timestamp"], reverse=True)
 
 
 @app.route("/")
@@ -50,11 +66,6 @@ def chat_claude():
     return jsonify({"reply": response.content[0].text})
 
 
-@app.route("/clear", methods=["POST"])
-def clear_all():
-    return jsonify({"status": "ok"})
-
-
 @app.route("/image/generate", methods=["POST"])
 @limiter.limit("5 per minute")
 def generate_image():
@@ -70,6 +81,35 @@ def generate_image():
         n=1,
     )
     return jsonify({"url": response.data[0].url})
+
+
+@app.route("/messages", methods=["GET"])
+def get_messages():
+    now = time.time()
+    active = get_active_messages()
+    return jsonify([{
+        "id": m["id"],
+        "text": m["text"],
+        "timestamp": m["timestamp"],
+        "expires_in": max(0, int(MESSAGE_TTL - (now - m["timestamp"])))
+    } for m in active])
+
+
+@app.route("/messages", methods=["POST"])
+@limiter.limit("5 per minute")
+def post_message():
+    data = request.json
+    text = data.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "Message is empty"}), 400
+    if len(text) > MAX_LENGTH:
+        return jsonify({"error": f"Max {MAX_LENGTH} characters"}), 400
+
+    msg = {"id": str(uuid.uuid4()), "text": text, "timestamp": time.time()}
+    with messages_lock:
+        messages.append(msg)
+
+    return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":

@@ -80,11 +80,14 @@ def chat_gpt():
     if not message:
         return jsonify({"error": "No message provided"}), 400
 
-    response = openai_client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": message}],
-    )
-    return jsonify({"reply": response.choices[0].message.content})
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": message}],
+        )
+        return jsonify({"reply": response.choices[0].message.content})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 
@@ -101,13 +104,16 @@ def generate_image():
     if not prompt:
         return jsonify({"error": "No prompt provided"}), 400
 
-    response = openai_client.images.generate(
-        model="dall-e-3",
-        prompt=prompt,
-        size="1024x1024",
-        n=1,
-    )
-    return jsonify({"url": response.data[0].url})
+    try:
+        response = openai_client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1024",
+            n=1,
+        )
+        return jsonify({"url": response.data[0].url})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/messages", methods=["GET"])

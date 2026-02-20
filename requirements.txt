@@ -1,6 +1,5 @@
 flask
 openai
-anthropic
 gunicorn
 flask-limiter
 psycopg2-binary

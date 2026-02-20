@@ -88,6 +88,11 @@ def chat_gpt():
 
 
 
+@app.route("/clear", methods=["POST"])
+def clear():
+    return jsonify({"status": "ok"})
+
+
 @app.route("/image/generate", methods=["POST"])
 @limiter.limit("5 per minute")
 def generate_image():

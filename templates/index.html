@@ -27,6 +27,15 @@
 
     header h1 { font-size: 18px; font-weight: 600; }
 
+    .banner {
+      background: #1a2a1a;
+      border-bottom: 1px solid #2a3a2a;
+      text-align: center;
+      padding: 8px 24px;
+      font-size: 12px;
+      color: #6abf6a;
+    }
+
     .tabs {
       display: flex;
       gap: 8px;
@@ -228,10 +237,12 @@
   </div>
   {% endif %}
 
+  <div class="banner">We do not collect, store, or share any of your data or conversations.</div>
+
   <header>
     <h1>AI Playground</h1>
     <div class="tabs">
-      <button class="tab active" data-mode="gpt">GPT-4o</button>
+      <button class="tab" data-mode="gpt">GPT-4o</button>
       <button class="tab" data-mode="claude">Claude</button>
       <button class="tab" data-mode="image">Image Gen</button>
     </div>
@@ -243,15 +254,15 @@
       <div class="chat-container" id="chat"></div>
       <div class="input-area">
         <div class="input-inner">
-          <input type="text" id="input" placeholder="Type a message..." />
-          <button id="send">Send</button>
+          <input type="text" id="input" placeholder="Choose a model above to start..." />
+          <button id="send" disabled>Send</button>
         </div>
       </div>
     </div>
   </main>
 
   <script>
-    let mode = "gpt";
+    let mode = null;
 
     const chat = document.getElementById("chat");
     const input = document.getElementById("input");
@@ -263,6 +274,8 @@
         tab.classList.add("active");
         mode = tab.dataset.mode;
         input.placeholder = mode === "image" ? "Describe an image..." : "Type a message...";
+        sendBtn.disabled = false;
+        input.focus();
       });
     });
 
@@ -287,7 +300,7 @@
 
     async function send() {
       const text = input.value.trim();
-      if (!text) return;
+      if (!text || !mode) return;
 
       addMessage(text, "user");
       input.value = "";

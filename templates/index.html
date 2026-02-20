@@ -192,9 +192,6 @@
   </main>
 
   <script>
-    // Trigger cleanup of old images on page load
-    fetch("/cleanup", { method: "POST" }).catch(() => {});
-
     let mode = "gpt";
 
     const chat = document.getElementById("chat");

@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 import os
-import time
-import urllib.request
-import datetime
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template
 import openai
 import anthropic
 
@@ -12,28 +9,10 @@ app = Flask(__name__)
 openai_client = openai.OpenAI()
 anthropic_client = anthropic.Anthropic()
 
-IMAGES_DIR = os.path.join(os.path.dirname(__file__), "static", "images")
-os.makedirs(IMAGES_DIR, exist_ok=True)
-
-IMAGE_TTL_SECONDS = 30 * 60  # 30 minutes
-
-
-def cleanup_old_images():
-    now = time.time()
-    for filename in os.listdir(IMAGES_DIR):
-        filepath = os.path.join(IMAGES_DIR, filename)
-        if os.path.isfile(filepath) and now - os.path.getmtime(filepath) > IMAGE_TTL_SECONDS:
-            os.remove(filepath)
-
 
 @app.route("/")
 def index():
     return render_template("index.html")
-
-
-@app.route("/static/images/<path:filename>")
-def serve_image(filename):
-    return send_from_directory(IMAGES_DIR, filename)
 
 
 @app.route("/chat/gpt", methods=["POST"])
@@ -65,24 +44,13 @@ def chat_claude():
     return jsonify({"reply": response.content[0].text})
 
 
-@app.route("/cleanup", methods=["POST"])
-def cleanup():
-    cleanup_old_images()
-    return jsonify({"status": "ok"})
-
-
 @app.route("/clear", methods=["POST"])
 def clear_all():
-    for filename in os.listdir(IMAGES_DIR):
-        filepath = os.path.join(IMAGES_DIR, filename)
-        if os.path.isfile(filepath):
-            os.remove(filepath)
     return jsonify({"status": "ok"})
 
 
 @app.route("/image/generate", methods=["POST"])
 def generate_image():
-    cleanup_old_images()
     data = request.json
     prompt = data.get("prompt", "").strip()
     if not prompt:
@@ -94,13 +62,7 @@ def generate_image():
         size="1024x1024",
         n=1,
     )
-    url = response.data[0].url
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"image_{timestamp}.png"
-    filepath = os.path.join(IMAGES_DIR, filename)
-    urllib.request.urlretrieve(url, filepath)
-
-    return jsonify({"url": f"/static/images/{filename}"})
+    return jsonify({"url": response.data[0].url})
 
 
 if __name__ == "__main__":

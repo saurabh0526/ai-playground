@@ -353,7 +353,8 @@
 
     function restoreHistory(m) {
       chat.innerHTML = "";
-      chatHistory[m] = JSON.parse(localStorage.getItem(`chat_${m}`) || "[]");
+      chatHistory[m] = JSON.parse(localStorage.getItem(`chat_${m}`) || "[]")
+        .filter(msg => msg.text || msg.isImage);
       chatHistory[m].forEach(msg => addMessage(msg.text, msg.sender, msg.isImage, true));
     }
 
@@ -366,7 +367,7 @@
       input.value = "";
       sendBtn.disabled = true;
 
-      const loading = addMessage("", "bot");
+      const loading = addMessage("", "bot", false, true);
       loading.appendChild(Object.assign(document.createElement("span"), { className: "loading", textContent: "Thinking..." }));
 
       try {
@@ -376,6 +377,10 @@
           data = await res.json();
           loading.innerHTML = `<div class="label">GPT-4o mini</div>`;
           loading.appendChild(document.createTextNode(data.reply));
+          if (data.reply) {
+            chatHistory[mode].push({ sender: "bot", text: data.reply, isImage: false });
+            localStorage.setItem(`chat_${mode}`, JSON.stringify(chatHistory[mode]));
+          }
         } else {
           res = await fetch("/image/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: text }) });
           data = await res.json();
@@ -383,6 +388,10 @@
           const img = document.createElement("img");
           img.src = data.url;
           loading.appendChild(img);
+          if (data.url) {
+            chatHistory[mode].push({ sender: "bot", text: data.url, isImage: true });
+            localStorage.setItem(`chat_${mode}`, JSON.stringify(chatHistory[mode]));
+          }
         }
       } catch (e) {
         loading.innerHTML = `<div class="label">Error</div>Something went wrong.`;

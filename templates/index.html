@@ -343,10 +343,9 @@
       document.getElementById("passwordInput").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
     }
 
-    document.getElementById("clear").addEventListener("click", async () => {
-      if (!confirm("Delete all chats and images?")) return;
-      await fetch("/clear", { method: "POST" }).catch(() => {});
+    document.getElementById("clear").addEventListener("click", () => {
       chat.innerHTML = "";
+      fetch("/clear", { method: "POST" }).catch(() => {});
     });
   </script>
 </body>

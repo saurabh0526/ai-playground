@@ -272,6 +272,19 @@
       display: block; max-height: 200px; object-fit: cover;
     }
 
+    .card-delete {
+      position: absolute;
+      top: 8px; right: 8px;
+      background: #e05555; border: none; color: #fff;
+      border-radius: 50%; width: 24px; height: 24px;
+      font-size: 14px; cursor: pointer; line-height: 24px;
+      text-align: center; opacity: 0; transition: opacity 0.2s;
+      padding: 0;
+    }
+
+    .card:hover .card-delete { opacity: 1; }
+    .card-delete:hover { background: #ff6666; }
+
     @media (max-width: 600px) {
       header { padding: 10px 14px; gap: 6px; }
       header h1 { font-size: 14px; }
@@ -334,7 +347,8 @@
   <div class="wall-view hidden" id="wallView">
     <div class="post-area">
       <div class="post-inner">
-        <textarea id="wallInput" placeholder="Say something... disappears in 7 days." maxlength="280"></textarea>
+        <div style="margin-bottom: 8px; font-size: 12px; color: #666;">📢 Public Wall - All messages are shared publicly and visible to everyone</div>
+        <textarea id="wallInput" placeholder="Say something... disappears in 7 days. This is public." maxlength="280"></textarea>
         <div class="attach-row hidden" id="wallAttachRow">
           <input class="attach-input" id="wallAttachUrl" placeholder="Paste image URL..." />
           <span class="attach-or">or</span>
@@ -738,11 +752,22 @@
         }
 
         card.innerHTML = `
+          <button class="card-delete" title="Delete message">×</button>
           <div class="card-text"></div>
           <div class="card-meta">
             <span>${new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
             <span class="expires ${soon ? "soon" : ""}">${formatExpiry(msg.expires_in)}</span>
           </div>`;
+        card.querySelector(".card-delete").addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (confirm("Delete this message?")) {
+            const res = await fetch(`/messages/${msg.id}`, { method: "DELETE" }).catch(() => null);
+            if (res && res.ok) {
+              card.remove();
+              cardPositions.delete(msg.id);
+            }
+          }
+        });
         card.querySelector(".card-text").textContent = msg.text;
         if (msg.image_url) {
           const img = document.createElement("img");

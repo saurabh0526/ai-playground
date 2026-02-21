@@ -204,6 +204,23 @@ def post_message():
     return jsonify({"status": "ok"})
 
 
+@app.route("/messages/<message_id>", methods=["DELETE"])
+def delete_message(message_id):
+    conn, ph = get_db()
+    try:
+        if DATABASE_URL:
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM messages WHERE id = {ph}", (message_id,))
+            conn.commit()
+            cur.close()
+        else:
+            with conn:
+                conn.execute(f"DELETE FROM messages WHERE id = {ph}", (message_id,))
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
 if __name__ == "__main__":
     debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
     app.run(debug=debug)

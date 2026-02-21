@@ -69,6 +69,19 @@
 
     .btn-clear:hover { background: #3a1010; border-color: #e05555; }
 
+    .btn-support {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid #3a5a3a;
+      background: transparent;
+      color: #7abf7a;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+
+    .btn-support:hover { background: #1a3a1a; border-color: #7abf7a; }
+
     /* ── AI Chat ── */
     .chat-view {
       flex: 1;
@@ -287,6 +300,7 @@
       <button class="tab" data-mode="image">Image Gen</button>
       <button class="tab wall-tab" data-mode="wall">The Wall</button>
     </div>
+    <button class="btn-support" id="support" title="Support the project">💛 Support</button>
     <button class="btn-clear" id="clear">Clear</button>
   </header>
 
@@ -772,12 +786,8 @@
 
     wallInput.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postBtn.click(); });
 
-    document.getElementById("supportToggle").addEventListener("click", () => {
-      const body = document.getElementById("supportBody");
-      const toggle = document.getElementById("supportToggle");
-      const open = body.classList.toggle("open");
-      toggle.setAttribute("aria-expanded", open);
-      toggle.querySelector(".support-chevron").textContent = open ? "▴" : "▾";
+    document.getElementById("support").addEventListener("click", () => {
+      window.open("https://buymeacoffee.com/saurabh.ai", "_blank");
     });
 
     setInterval(() => { if (mode === "wall") loadMessages(); }, 30000);

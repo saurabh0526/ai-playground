@@ -10,10 +10,17 @@ import openai
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from bs4 import BeautifulSoup
+from better_profanity import profanity
 
 app = Flask(__name__)
 
 limiter = Limiter(get_remote_address, app=app)
+
+# Initialize profanity filter
+try:
+    profanity.load_censor_words()
+except Exception as e:
+    print(f"Warning: Profanity filter initialization: {e}")
 
 try:
     openai_client = openai.OpenAI()
@@ -148,7 +155,37 @@ def fetch_link_preview(url):
         return {"error": str(e)}
 
 
-
+def is_content_abusive(text):
+    """Check if content contains abusive/inappropriate elements"""
+    if not text or len(text) < 1:
+        return False
+    
+    # Check for profanity
+    if profanity.contains_profanity(text):
+        return True
+    
+    # Check for excessive caps (>80% uppercase letters)
+    letters = [c for c in text if c.isalpha()]
+    if letters:
+        caps_ratio = sum(1 for c in letters if c.isupper()) / len(letters)
+        if caps_ratio > 0.8 and len(letters) > 5:
+            return True
+    
+    # Check for repeated characters (more than 4 same chars in a row = spam)
+    for i in range(len(text) - 4):
+        if len(set(text[i:i+5])) == 1:
+            return True
+    
+    # Check for excessive repeated words
+    words = text.lower().split()
+    if len(words) > 5:
+        word_counts = {}
+        for word in words:
+            word_counts[word] = word_counts.get(word, 0) + 1
+        if any(count > len(words) * 0.5 for count in word_counts.values()):
+            return True
+    
+    return False
 
 
 @app.route("/")
@@ -265,6 +302,11 @@ def post_message():
         return jsonify({"error": "Message is empty"}), 400
     if len(text) > MAX_LENGTH:
         return jsonify({"error": f"Max {MAX_LENGTH} characters"}), 400
+    
+    # Check for abusive content
+    if is_content_abusive(text):
+        return jsonify({"error": "Your message contains inappropriate content and cannot be posted. Please review our community guidelines."}), 400
+    
     image_url = data.get("image_url", "").strip() or None
 
     conn, ph = get_db()

@@ -5,3 +5,4 @@ flask-limiter
 psycopg2-binary
 requests
 beautifulsoup4
+better-profanity

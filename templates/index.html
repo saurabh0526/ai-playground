@@ -187,6 +187,17 @@
     .char-count { font-size: 12px; color: #555; }
     .char-count.warn { color: #e05555; }
 
+    .post-error {
+      background: #3a1a1a;
+      border: 1px solid #e05555;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      color: #ff8888;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
     .wall-board {
       flex: 1;
       position: relative;
@@ -414,8 +425,7 @@
   <div class="wall-view hidden" id="wallView">
     <div class="post-area">
       <div class="post-inner">
-        <div style="margin-bottom: 8px; font-size: 12px; color: #666;">� Public News Space - Share links, opinions, and news. All posts are public and visible to everyone.</div>
-        <textarea id="wallInput" placeholder="Share a link, opinion, or news... Posts disappear in 7 days." maxlength="400"></textarea>
+        <div style="margin-bottom: 8px; font-size: 12px; color: #666;">📰 Public News Space - Share links, opinions, and news anonymously. All posts are public and visible to everyone. 🔒</div>        <div class="post-error hidden" id="postError"></div>        <textarea id="wallInput" placeholder="Share a link, opinion, or news anonymously... Posts disappear in 7 days." maxlength="400"></textarea>
         <div class="attach-row hidden" id="wallAttachRow">
           <input class="attach-input" id="wallAttachUrl" placeholder="Paste image URL..." />
           <span class="attach-or">or</span>
@@ -918,6 +928,8 @@
 
     postBtn.addEventListener("click", async () => {
       const text = wallInput.value.trim();
+      const postError = document.getElementById("postError");
+      postError.classList.add("hidden");
       if (!text) return;
       if (navigator.vibrate) navigator.vibrate(10);
       postBtn.disabled = true;
@@ -937,6 +949,11 @@
         charCount.textContent = "400 left";
         charCount.classList.remove("warn");
         loadMessages();
+      } else if (res) {
+        const data = await res.json().catch(() => ({}));
+        const errorMsg = data.error || "Failed to post. Please try again.";
+        postError.textContent = errorMsg;
+        postError.classList.remove("hidden");
       }
     });
 

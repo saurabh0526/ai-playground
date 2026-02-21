@@ -3,10 +3,13 @@ import os
 import time
 import uuid
 import sqlite3
+import requests
+from urllib.parse import urlparse
 from flask import Flask, request, jsonify, render_template
 import openai
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
@@ -54,6 +57,14 @@ def init_db():
                 )
             """)
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_url TEXT")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS reports (
+                    id TEXT PRIMARY KEY,
+                    message_id TEXT NOT NULL,
+                    reason TEXT,
+                    timestamp REAL NOT NULL
+                )
+            """)
             conn.commit()
             cur.close()
         else:
@@ -69,6 +80,17 @@ def init_db():
                     conn.execute("ALTER TABLE messages ADD COLUMN image_url TEXT")
                 except Exception:
                     pass  # column already exists
+                try:
+                    conn.execute("""
+                        CREATE TABLE IF NOT EXISTS reports (
+                            id TEXT PRIMARY KEY,
+                            message_id TEXT NOT NULL,
+                            reason TEXT,
+                            timestamp REAL NOT NULL
+                        )
+                    """)
+                except Exception:
+                    pass  # table already exists
     finally:
         conn.close()
 
@@ -79,9 +101,71 @@ except Exception as e:
     print(f"Warning: DB init failed: {e}")
 
 
+def fetch_link_preview(url):
+    """Fetch metadata from a URL for preview"""
+    try:
+        # Validate URL format
+        parsed = urlparse(url)
+        if not parsed.scheme:
+            url = "https://" + url
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=5)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.content, "html.parser")
+        
+        # Extract metadata from Open Graph tags
+        og_title = soup.find("meta", property="og:title")
+        og_desc = soup.find("meta", property="og:description")
+        og_image = soup.find("meta", property="og:image")
+        
+        # Fallback to regular meta tags
+        if not og_title:
+            title_tag = soup.find("title")
+            og_title = title_tag.string if title_tag else None
+        else:
+            og_title = og_title.get("content")
+            
+        if not og_desc:
+            desc_tag = soup.find("meta", attrs={"name": "description"})
+            og_desc = desc_tag.get("content") if desc_tag else None
+        else:
+            og_desc = og_desc.get("content")
+            
+        og_image = og_image.get("content") if og_image else None
+        
+        return {
+            "title": og_title or "Link Preview",
+            "description": og_desc or "",
+            "image": og_image,
+            "url": url
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/link-preview", methods=["POST"])
+@limiter.limit("10 per minute")
+def link_preview():
+    data = request.json
+    url = data.get("url", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    
+    preview = fetch_link_preview(url)
+    return jsonify(preview)
 
 
 @app.route("/chat/gpt", methods=["POST"])
@@ -216,6 +300,33 @@ def delete_message(message_id):
         else:
             with conn:
                 conn.execute(f"DELETE FROM messages WHERE id = {ph}", (message_id,))
+    finally:
+        conn.close()
+    return jsonify({"status": "ok"})
+
+
+@app.route("/messages/<message_id>/report", methods=["POST"])
+@limiter.limit("5 per minute")
+def report_message(message_id):
+    data = request.json or {}
+    reason = data.get("reason", "").strip()
+    
+    conn, ph = get_db()
+    try:
+        if DATABASE_URL:
+            cur = conn.cursor()
+            cur.execute(
+                f"INSERT INTO reports (id, message_id, reason, timestamp) VALUES ({ph}, {ph}, {ph}, {ph})",
+                (str(uuid.uuid4()), message_id, reason or None, time.time())
+            )
+            conn.commit()
+            cur.close()
+        else:
+            with conn:
+                conn.execute(
+                    f"INSERT INTO reports (id, message_id, reason, timestamp) VALUES ({ph}, {ph}, {ph}, {ph})",
+                    (str(uuid.uuid4()), message_id, reason or None, time.time())
+                )
     finally:
         conn.close()
     return jsonify({"status": "ok"})

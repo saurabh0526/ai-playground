@@ -254,11 +254,6 @@
       line-height: 20px; text-align: center; flex-shrink: 0;
     }
     .attach-remove:hover { background: #666; }
-    .wall-image-url {
-      width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #333;
-      background: #2a2a2a; color: #f0f0f0; font-size: 13px; outline: none;
-    }
-    .wall-image-url:focus { border-color: #555; }
     .card-image {
       max-width: 100%; border-radius: 8px; margin-top: 6px;
       display: block; max-height: 200px; object-fit: cover;
@@ -274,6 +269,10 @@
       .input-area input { padding: 10px 14px; font-size: 14px; }
       .input-area button, .post-inner button { padding: 10px 16px; font-size: 13px; }
       .card { width: 160px; }
+      .support-toggle { cursor: pointer; pointer-events: auto; padding: 4px 0; }
+      .support-chevron { display: inline; }
+      .support-body { display: none; }
+      .support-body.open { display: block; }
     }
 
     .support-section {
@@ -285,6 +284,14 @@
       font-size: 0.82rem;
       line-height: 1.7;
     }
+    .support-toggle {
+      background: none; border: none; color: #888;
+      font-size: 0.82rem; cursor: default; padding: 0 0 8px;
+      display: block; width: 100%; text-align: center;
+      pointer-events: none;
+    }
+    .support-chevron { display: none; }
+    .support-body { display: block; }
     .support-section p { margin: 0 0 12px; }
     .btn-support {
       display: inline-block;
@@ -344,9 +351,21 @@
     <div class="post-area">
       <div class="post-inner">
         <textarea id="wallInput" placeholder="Say something... disappears in 7 days." maxlength="280"></textarea>
-        <input class="wall-image-url" id="wallImageUrl" placeholder="🖼 Image URL (optional)" />
+        <div class="attach-row hidden" id="wallAttachRow">
+          <input class="attach-input" id="wallAttachUrl" placeholder="Paste image URL..." />
+          <span class="attach-or">or</span>
+          <label class="attach-upload-label">
+            Upload <input type="file" id="wallAttachFile" accept="image/*" style="display:none">
+          </label>
+        </div>
+        <div class="attach-preview-wrap hidden" id="wallAttachPreview">
+          <img class="attach-thumb" id="wallAttachThumb" src="" alt="preview">
+          <span class="attach-label" id="wallAttachLabel"></span>
+          <button class="attach-remove" id="wallAttachRemove">×</button>
+        </div>
         <div class="post-footer">
           <span class="char-count" id="charCount">280 left</span>
+          <button class="attach-toggle" id="wallAttachToggle" title="Attach image">📎</button>
           <button id="postBtn">Post</button>
         </div>
       </div>
@@ -355,17 +374,22 @@
   </div>
 
   <footer class="support-section">
-    <p>💛 Support This Project</p>
-    <p>This app is free to use and does not store any user data.<br>
-       If you find it helpful, you can support development via Buy Me a Coffee.</p>
-    <a class="btn-support" href="https://buymeacoffee.com/saurabh.ai" target="_blank" rel="noopener">
-      ☕ Support on Buy Me a Coffee
-    </a>
+    <button class="support-toggle" id="supportToggle" aria-expanded="false">
+      💛 Support this project <span class="support-chevron">▾</span>
+    </button>
+    <div class="support-body" id="supportBody">
+      <p>This app is free to use and does not store any user data.<br>
+         If you find it helpful, you can support development via Buy Me a Coffee.</p>
+      <a class="btn-support" href="https://buymeacoffee.com/saurabh.ai" target="_blank" rel="noopener">
+        ☕ Support on Buy Me a Coffee
+      </a>
+    </div>
   </footer>
 
   <script>
     let mode = null;
-    let attachedImage = null; // { url } or { b64, mime }
+    let attachedImage = null;     // { url } or { b64, mime }
+    let wallAttachedImage = null; // { url } or { b64, mime }
     const chatHistory = { gpt: [], image: [] };
 
     const chat = document.getElementById("chat");
@@ -432,6 +456,68 @@
     attachRemove.addEventListener("click", () => {
       clearAttachment();
       attachRow.classList.remove("hidden");
+    });
+
+    // ── Wall attachment ──
+    const wallAttachToggle  = document.getElementById("wallAttachToggle");
+    const wallAttachRow     = document.getElementById("wallAttachRow");
+    const wallAttachUrl     = document.getElementById("wallAttachUrl");
+    const wallAttachFile    = document.getElementById("wallAttachFile");
+    const wallAttachPreview = document.getElementById("wallAttachPreview");
+    const wallAttachThumb   = document.getElementById("wallAttachThumb");
+    const wallAttachLabel   = document.getElementById("wallAttachLabel");
+    const wallAttachRemove  = document.getElementById("wallAttachRemove");
+
+    function showWallAttachPreview(src, label) {
+      wallAttachThumb.src = src;
+      wallAttachLabel.textContent = label;
+      wallAttachRow.classList.add("hidden");
+      wallAttachPreview.classList.remove("hidden");
+    }
+
+    function clearWallAttachment() {
+      wallAttachedImage = null;
+      wallAttachUrl.value = "";
+      wallAttachFile.value = "";
+      wallAttachThumb.src = "";
+      wallAttachLabel.textContent = "";
+      wallAttachRow.classList.add("hidden");
+      wallAttachPreview.classList.add("hidden");
+    }
+
+    wallAttachToggle.addEventListener("click", () => {
+      wallAttachRow.classList.toggle("hidden");
+    });
+
+    wallAttachUrl.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); confirmWallAttachUrl(); }
+    });
+    wallAttachUrl.addEventListener("blur", confirmWallAttachUrl);
+
+    function confirmWallAttachUrl() {
+      const url = wallAttachUrl.value.trim();
+      if (!url) return;
+      wallAttachedImage = { url };
+      showWallAttachPreview(url, url.length > 40 ? url.slice(0, 40) + "…" : url);
+    }
+
+    wallAttachFile.addEventListener("change", () => {
+      const file = wallAttachFile.files[0];
+      if (!file) return;
+      if (file.size > 4 * 1024 * 1024) { alert("Image must be under 4 MB"); wallAttachFile.value = ""; return; }
+      const reader = new FileReader();
+      reader.onload = e => {
+        const dataUrl = e.target.result;
+        const b64 = dataUrl.split(",")[1];
+        wallAttachedImage = { b64, mime: file.type };
+        showWallAttachPreview(dataUrl, file.name);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    wallAttachRemove.addEventListener("click", () => {
+      clearWallAttachment();
+      wallAttachRow.classList.remove("hidden");
     });
 
     document.querySelectorAll(".tab").forEach(tab => {
@@ -706,7 +792,10 @@
       if (!text) return;
       if (navigator.vibrate) navigator.vibrate(10);
       postBtn.disabled = true;
-      const wallImg = document.getElementById("wallImageUrl").value.trim() || undefined;
+      let wallImg;
+      if (wallAttachedImage) {
+        wallImg = wallAttachedImage.url ?? `data:${wallAttachedImage.mime};base64,${wallAttachedImage.b64}`;
+      }
       const res = await fetch("/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -715,7 +804,7 @@
       postBtn.disabled = false;
       if (res && res.ok) {
         wallInput.value = "";
-        document.getElementById("wallImageUrl").value = "";
+        clearWallAttachment();
         charCount.textContent = "280 left";
         charCount.classList.remove("warn");
         loadMessages();
@@ -723,6 +812,14 @@
     });
 
     wallInput.addEventListener("keydown", e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postBtn.click(); });
+
+    document.getElementById("supportToggle").addEventListener("click", () => {
+      const body = document.getElementById("supportBody");
+      const toggle = document.getElementById("supportToggle");
+      const open = body.classList.toggle("open");
+      toggle.setAttribute("aria-expanded", open);
+      toggle.querySelector(".support-chevron").textContent = open ? "▴" : "▾";
+    });
 
     setInterval(() => { if (mode === "wall") loadMessages(); }, 30000);
   </script>

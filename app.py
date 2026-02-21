@@ -53,6 +53,7 @@ def init_db():
                     timestamp REAL NOT NULL
                 )
             """)
+            cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_url TEXT")
             conn.commit()
             cur.close()
         else:
@@ -64,6 +65,10 @@ def init_db():
                         timestamp REAL NOT NULL
                     )
                 """)
+                try:
+                    conn.execute("ALTER TABLE messages ADD COLUMN image_url TEXT")
+                except Exception:
+                    pass  # column already exists
     finally:
         conn.close()
 
@@ -89,10 +94,18 @@ def chat_gpt():
     if not openai_client:
         return jsonify({"error": "OpenAI not configured"}), 503
 
+    image = data.get("image")
+    if image:
+        img_url = image.get("url") or f"data:{image['mime']};base64,{image['b64']}"
+        content = [{"type": "text", "text": message},
+                   {"type": "image_url", "image_url": {"url": img_url}}]
+    else:
+        content = message
+
     try:
         response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "user", "content": message}],
+            messages=[{"role": "user", "content": content}],
         )
         return jsonify({"reply": response.choices[0].message.content})
     except Exception as e:
@@ -136,12 +149,13 @@ def get_messages():
         if DATABASE_URL:
             cur = conn.cursor()
             cur.execute(f"DELETE FROM messages WHERE timestamp < {ph}", (cutoff,))
-            cur.execute("SELECT id, text, timestamp FROM messages ORDER BY timestamp DESC")
+            cur.execute("SELECT id, text, timestamp, image_url FROM messages ORDER BY timestamp DESC")
             rows = cur.fetchall()
             conn.commit()
             cur.close()
             return jsonify([{
                 "id": r[0], "text": r[1], "timestamp": r[2],
+                "image_url": r[3],
                 "expires_in": max(0, int(MESSAGE_TTL - (now - r[2])))
             } for r in rows])
         else:
@@ -150,6 +164,7 @@ def get_messages():
                 rows = conn.execute("SELECT * FROM messages ORDER BY timestamp DESC").fetchall()
                 return jsonify([{
                     "id": r["id"], "text": r["text"], "timestamp": r["timestamp"],
+                    "image_url": r["image_url"],
                     "expires_in": max(0, int(MESSAGE_TTL - (now - r["timestamp"])))
                 } for r in rows])
     finally:
@@ -165,22 +180,23 @@ def post_message():
         return jsonify({"error": "Message is empty"}), 400
     if len(text) > MAX_LENGTH:
         return jsonify({"error": f"Max {MAX_LENGTH} characters"}), 400
+    image_url = data.get("image_url", "").strip() or None
 
     conn, ph = get_db()
     try:
         if DATABASE_URL:
             cur = conn.cursor()
             cur.execute(
-                f"INSERT INTO messages (id, text, timestamp) VALUES ({ph}, {ph}, {ph})",
-                (str(uuid.uuid4()), text, time.time())
+                f"INSERT INTO messages (id, text, timestamp, image_url) VALUES ({ph}, {ph}, {ph}, {ph})",
+                (str(uuid.uuid4()), text, time.time(), image_url)
             )
             conn.commit()
             cur.close()
         else:
             with conn:
                 conn.execute(
-                    f"INSERT INTO messages (id, text, timestamp) VALUES ({ph}, {ph}, {ph})",
-                    (str(uuid.uuid4()), text, time.time())
+                    f"INSERT INTO messages (id, text, timestamp, image_url) VALUES ({ph}, {ph}, {ph}, {ph})",
+                    (str(uuid.uuid4()), text, time.time(), image_url)
                 )
     finally:
         conn.close()

@@ -235,6 +235,49 @@
 
     .hidden { display: none !important; }
 
+    /* ── Image Attachment ── */
+    .attach-row {
+      display: flex; align-items: center; gap: 8px; padding: 4px 0 0;
+    }
+    .attach-toggle {
+      background: none; border: none; color: #666; font-size: 18px;
+      cursor: pointer; padding: 0 4px; line-height: 1; flex-shrink: 0;
+    }
+    .attach-toggle:hover { color: #aaa; }
+    .attach-input {
+      flex: 1; padding: 6px 12px; border-radius: 8px; border: 1px solid #333;
+      background: #2a2a2a; color: #f0f0f0; font-size: 13px; outline: none;
+    }
+    .attach-input:focus { border-color: #555; }
+    .attach-or { color: #555; font-size: 12px; flex-shrink: 0; }
+    .attach-upload-label {
+      color: #888; font-size: 13px; cursor: pointer; flex-shrink: 0;
+    }
+    .attach-upload-label:hover { color: #bbb; }
+    .attach-preview-wrap {
+      display: flex; align-items: center; gap: 8px; padding: 4px 0 0;
+    }
+    .attach-thumb {
+      height: 48px; width: 48px; object-fit: cover;
+      border-radius: 6px; border: 1px solid #333;
+    }
+    .attach-label { font-size: 12px; color: #888; flex: 1; }
+    .attach-remove {
+      background: #444; border: none; color: #fff; border-radius: 50%;
+      width: 20px; height: 20px; font-size: 12px; cursor: pointer;
+      line-height: 20px; text-align: center; flex-shrink: 0;
+    }
+    .attach-remove:hover { background: #666; }
+    .wall-image-url {
+      width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid #333;
+      background: #2a2a2a; color: #f0f0f0; font-size: 13px; outline: none;
+    }
+    .wall-image-url:focus { border-color: #555; }
+    .card-image {
+      max-width: 100%; border-radius: 8px; margin-top: 6px;
+      display: block; max-height: 200px; object-fit: cover;
+    }
+
     @media (max-width: 600px) {
       header { padding: 10px 14px; gap: 6px; }
       header h1 { font-size: 14px; }
@@ -270,7 +313,20 @@
       <div class="input-area">
         <div class="input-inner">
           <input type="text" id="input" placeholder="Choose a model above to start..." />
+          <button class="attach-toggle hidden" id="attachToggle" title="Attach image">📎</button>
           <button id="send" disabled>Send</button>
+        </div>
+        <div class="attach-row hidden" id="attachRow">
+          <input class="attach-input" id="attachUrl" placeholder="Paste image URL..." />
+          <span class="attach-or">or</span>
+          <label class="attach-upload-label">
+            Upload <input type="file" id="attachFile" accept="image/*" style="display:none">
+          </label>
+        </div>
+        <div class="attach-preview-wrap hidden" id="attachPreview">
+          <img class="attach-thumb" id="attachThumb" src="" alt="preview">
+          <span class="attach-label" id="attachLabel"></span>
+          <button class="attach-remove" id="attachRemove">×</button>
         </div>
       </div>
     </div>
@@ -281,6 +337,7 @@
     <div class="post-area">
       <div class="post-inner">
         <textarea id="wallInput" placeholder="Say something... disappears in 7 days." maxlength="280"></textarea>
+        <input class="wall-image-url" id="wallImageUrl" placeholder="🖼 Image URL (optional)" />
         <div class="post-footer">
           <span class="char-count" id="charCount">280 left</span>
           <button id="postBtn">Post</button>
@@ -292,6 +349,7 @@
 
   <script>
     let mode = null;
+    let attachedImage = null; // { url } or { b64, mime }
     const chatHistory = { gpt: [], image: [] };
 
     const chat = document.getElementById("chat");
@@ -299,6 +357,66 @@
     const sendBtn = document.getElementById("send");
     const chatView = document.getElementById("chatView");
     const wallView = document.getElementById("wallView");
+    const attachToggle = document.getElementById("attachToggle");
+    const attachRow = document.getElementById("attachRow");
+    const attachPreview = document.getElementById("attachPreview");
+    const attachUrl = document.getElementById("attachUrl");
+    const attachFile = document.getElementById("attachFile");
+    const attachThumb = document.getElementById("attachThumb");
+    const attachLabel = document.getElementById("attachLabel");
+    const attachRemove = document.getElementById("attachRemove");
+
+    function clearAttachment() {
+      attachedImage = null;
+      attachUrl.value = "";
+      attachFile.value = "";
+      attachThumb.src = "";
+      attachLabel.textContent = "";
+      attachRow.classList.add("hidden");
+      attachPreview.classList.add("hidden");
+    }
+
+    function showAttachPreview(src, label) {
+      attachThumb.src = src;
+      attachLabel.textContent = label;
+      attachRow.classList.add("hidden");
+      attachPreview.classList.remove("hidden");
+    }
+
+    attachToggle.addEventListener("click", () => {
+      attachRow.classList.toggle("hidden");
+    });
+
+    attachUrl.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); confirmAttachUrl(); }
+    });
+    attachUrl.addEventListener("blur", confirmAttachUrl);
+
+    function confirmAttachUrl() {
+      const url = attachUrl.value.trim();
+      if (!url) return;
+      attachedImage = { url };
+      showAttachPreview(url, url.length > 40 ? url.slice(0, 40) + "…" : url);
+    }
+
+    attachFile.addEventListener("change", () => {
+      const file = attachFile.files[0];
+      if (!file) return;
+      if (file.size > 4 * 1024 * 1024) { alert("Image must be under 4 MB"); attachFile.value = ""; return; }
+      const reader = new FileReader();
+      reader.onload = e => {
+        const dataUrl = e.target.result;
+        const b64 = dataUrl.split(",")[1];
+        attachedImage = { b64, mime: file.type };
+        showAttachPreview(dataUrl, file.name);
+      };
+      reader.readAsDataURL(file);
+    });
+
+    attachRemove.addEventListener("click", () => {
+      clearAttachment();
+      attachRow.classList.remove("hidden");
+    });
 
     document.querySelectorAll(".tab").forEach(tab => {
       tab.addEventListener("click", () => {
@@ -315,6 +433,12 @@
           chatView.classList.remove("hidden");
           input.placeholder = mode === "image" ? "Describe an image..." : "Type a message...";
           sendBtn.disabled = false;
+          if (mode === "gpt") {
+            attachToggle.classList.remove("hidden");
+          } else {
+            attachToggle.classList.add("hidden");
+            clearAttachment();
+          }
           restoreHistory(mode);
           input.focus();
         }
@@ -373,7 +497,9 @@
       try {
         let res, data;
         if (mode === "gpt") {
-          res = await fetch("/chat/gpt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: text }) });
+          const body = { message: text };
+          if (attachedImage) body.image = attachedImage;
+          res = await fetch("/chat/gpt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
           data = await res.json();
           loading.innerHTML = `<div class="label">GPT-4o mini</div>`;
           loading.appendChild(document.createTextNode(data.reply));
@@ -398,6 +524,7 @@
       }
 
       sendBtn.disabled = false;
+      clearAttachment();
       input.focus();
     }
 
@@ -542,6 +669,13 @@
             <span class="expires ${soon ? "soon" : ""}">${formatExpiry(msg.expires_in)}</span>
           </div>`;
         card.querySelector(".card-text").textContent = msg.text;
+        if (msg.image_url) {
+          const img = document.createElement("img");
+          img.src = msg.image_url;
+          img.className = "card-image";
+          img.onerror = () => img.remove();
+          card.querySelector(".card-text").after(img);
+        }
       });
     }
 
@@ -556,14 +690,16 @@
       if (!text) return;
       if (navigator.vibrate) navigator.vibrate(10);
       postBtn.disabled = true;
+      const wallImg = document.getElementById("wallImageUrl").value.trim() || undefined;
       const res = await fetch("/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({ text, image_url: wallImg })
       }).catch(() => null);
       postBtn.disabled = false;
       if (res && res.ok) {
         wallInput.value = "";
+        document.getElementById("wallImageUrl").value = "";
         charCount.textContent = "280 left";
         charCount.classList.remove("warn");
         loadMessages();

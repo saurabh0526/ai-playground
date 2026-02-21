@@ -271,42 +271,10 @@
       .attach-input { font-size: 16px; }
       .input-area button, .post-inner button { padding: 10px 16px; font-size: 13px; }
       .card { width: 160px; }
-      .support-toggle { cursor: pointer; pointer-events: auto; padding: 4px 0; }
-      .support-chevron { display: inline; }
-      .support-body { display: none; }
-      .support-body.open { display: block; }
+
     }
 
-    .support-section {
-      text-align: center;
-      padding: 24px 16px 32px;
-      border-top: 1px solid #333;
-      margin-top: 12px;
-      color: #888;
-      font-size: 0.82rem;
-      line-height: 1.7;
-    }
-    .support-toggle {
-      background: none; border: none; color: #888;
-      font-size: 0.82rem; cursor: default; padding: 0 0 8px;
-      display: block; width: 100%; text-align: center;
-      pointer-events: none;
-    }
-    .support-chevron { display: none; }
-    .support-body { display: block; }
-    .support-section p { margin: 0 0 12px; }
-    .btn-support {
-      display: inline-block;
-      padding: 8px 20px;
-      border: 1px solid #6b4c1e;
-      border-radius: 20px;
-      background: transparent;
-      color: #d4920a;
-      font-size: 0.85rem;
-      text-decoration: none;
-      transition: background 0.2s;
-    }
-    .btn-support:hover { background: rgba(212,146,10,0.08); }
+
   </style>
 </head>
 <body>
@@ -375,18 +343,7 @@
     <div class="wall-board" id="wallBoard"></div>
   </div>
 
-  <footer class="support-section">
-    <button class="support-toggle" id="supportToggle" aria-expanded="false">
-      💛 Support this project <span class="support-chevron">▾</span>
-    </button>
-    <div class="support-body" id="supportBody">
-      <p>This app is free to use and does not store any user data.<br>
-         If you find it helpful, you can support development via Buy Me a Coffee.</p>
-      <a class="btn-support" href="https://buymeacoffee.com/saurabh.ai" target="_blank" rel="noopener">
-        ☕ Support on Buy Me a Coffee
-      </a>
-    </div>
-  </footer>
+
 
   <script>
     let mode = null;

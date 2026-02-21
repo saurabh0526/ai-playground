@@ -69,20 +69,6 @@
 
     .btn-clear:hover { background: #3a1010; border-color: #e05555; }
 
-    .btn-coffee {
-      padding: 6px 14px;
-      border-radius: 6px;
-      border: 1px solid #6b4c1e;
-      background: transparent;
-      color: #d4920a;
-      cursor: pointer;
-      font-size: 13px;
-      text-decoration: none;
-      transition: all 0.15s;
-    }
-
-    .btn-coffee:hover { background: #2a1f0a; border-color: #d4920a; }
-
     /* ── AI Chat ── */
     .chat-view {
       flex: 1;
@@ -288,8 +274,30 @@
       .input-area input { padding: 10px 14px; font-size: 14px; }
       .input-area button, .post-inner button { padding: 10px 16px; font-size: 13px; }
       .card { width: 160px; }
-      .btn-coffee { padding: 5px 10px; font-size: 12px; }
     }
+
+    .support-section {
+      text-align: center;
+      padding: 24px 16px 32px;
+      border-top: 1px solid #333;
+      margin-top: 12px;
+      color: #888;
+      font-size: 0.82rem;
+      line-height: 1.7;
+    }
+    .support-section p { margin: 0 0 12px; }
+    .btn-support {
+      display: inline-block;
+      padding: 8px 20px;
+      border: 1px solid #6b4c1e;
+      border-radius: 20px;
+      background: transparent;
+      color: #d4920a;
+      font-size: 0.85rem;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn-support:hover { background: rgba(212,146,10,0.08); }
   </style>
 </head>
 <body>
@@ -302,7 +310,6 @@
       <button class="tab" data-mode="image">Image Gen</button>
       <button class="tab wall-tab" data-mode="wall">The Wall</button>
     </div>
-    <a class="btn-coffee" href="https://buymeacoffee.com/saurabh.ai" target="_blank" rel="noopener">☕ Support the developer</a>
     <button class="btn-clear" id="clear">Clear</button>
   </header>
 
@@ -346,6 +353,15 @@
     </div>
     <div class="wall-board" id="wallBoard"></div>
   </div>
+
+  <footer class="support-section">
+    <p>💛 Support This Project</p>
+    <p>This app is free to use and does not store any user data.<br>
+       If you find it helpful, you can support development via Buy Me a Coffee.</p>
+    <a class="btn-support" href="https://buymeacoffee.com/saurabh.ai" target="_blank" rel="noopener">
+      ☕ Support on Buy Me a Coffee
+    </a>
+  </footer>
 
   <script>
     let mode = null;

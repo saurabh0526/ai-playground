@@ -173,6 +173,7 @@ def get_messages():
 
 @app.route("/messages", methods=["POST"])
 @limiter.limit("5 per minute")
+@limiter.limit("100 per day")
 def post_message():
     data = request.json
     text = data.get("text", "").strip()

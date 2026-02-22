@@ -5,6 +5,8 @@ import uuid
 import sqlite3
 import requests
 import re
+import random
+from collections import Counter
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify, render_template
 import openai
@@ -66,6 +68,7 @@ def init_db():
             """)
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_url TEXT")
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_ai BOOLEAN DEFAULT FALSE")
+            cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_news BOOLEAN DEFAULT FALSE")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS reports (
                     id TEXT PRIMARY KEY,
@@ -91,6 +94,10 @@ def init_db():
                     pass  # column already exists
                 try:
                     conn.execute("ALTER TABLE messages ADD COLUMN is_ai BOOLEAN DEFAULT FALSE")
+                except Exception:
+                    pass  # column already exists
+                try:
+                    conn.execute("ALTER TABLE messages ADD COLUMN is_news BOOLEAN DEFAULT FALSE")
                 except Exception:
                     pass  # column already exists
                 try:
@@ -194,8 +201,46 @@ def is_content_abusive(text):
     return False
 
 
+def cleanup_old_news():
+    """Delete news posts older than 30 minutes"""
+    try:
+        conn, ph = get_db()
+        cutoff_time = time.time() - (30 * 60)  # 30 minutes ago
+        
+        if DATABASE_URL:
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM messages WHERE is_news = TRUE AND timestamp < {ph}", (cutoff_time,))
+            conn.commit()
+            cur.close()
+        else:
+            with conn:
+                conn.execute(f"DELETE FROM messages WHERE is_news = TRUE AND timestamp < {ph}", (cutoff_time,))
+        
+        conn.close()
+    except Exception as e:
+        print(f"Error cleaning up old news: {e}")
+
+
+def extract_topics(title):
+    """Extract significant words/topics from a title"""
+    # Common stop words to ignore
+    stop_words = {
+        'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'is', 'are',
+        'says', 'said', 'say', 'has', 'have', 'been', 'be', 'as', 'by', 'from', 'up', 'about', 'into',
+        'through', 'during', 'before', 'after', 'above', 'below', 'under', 'then', 'than', 'it', 'its'
+    }
+    
+    # Extract words and convert to lowercase
+    words = re.findall(r'\b\w+\b', title.lower())
+    
+    # Filter out stop words and short words, keep significant terms
+    topics = [w for w in words if w not in stop_words and len(w) > 3]
+    
+    return topics
+
+
 def fetch_top_news(count=2):
-    """Fetch top general news (politics, sports, world) from multiple sources"""
+    """Fetch news from multiple sources, select from top 5 most frequent topics"""
     try:
         articles = []
         
@@ -203,7 +248,7 @@ def fetch_top_news(count=2):
         try:
             response = requests.get("http://feeds.bbc.co.uk/news/rss.xml", timeout=5)
             soup = BeautifulSoup(response.content, "xml")
-            items = soup.find_all("item")[:20]
+            items = soup.find_all("item")[:15]
             
             for item in items:
                 title = item.find("title")
@@ -214,24 +259,39 @@ def fetch_top_news(count=2):
                         "title": title.string,
                         "url": link.string
                     })
-                
-                if len(articles) >= count:
-                    break
         except Exception as e:
             print(f"BBC feed error: {e}")
         
-        # If BBC didn't work, try Reuters
-        if len(articles) < count:
+        # Fetch from BBC Sports
+        try:
+            response = requests.get("http://feeds.bbc.co.uk/sport/rss.xml", timeout=5)
+            soup = BeautifulSoup(response.content, "xml")
+            items = soup.find_all("item")[:15]
+            
+            for item in items:
+                title = item.find("title")
+                link = item.find("link")
+                
+                if title and link:
+                    articles.append({
+                        "title": title.string,
+                        "url": link.string
+                    })
+        except Exception as e:
+            print(f"BBC Sports feed error: {e}")
+        
+        # If BBC didn't work well, try Reuters
+        if len(articles) < 10:
             try:
                 response = requests.get("https://www.reutersagency.com/feed/?taxonomy=best-topics&output=rss", timeout=5)
                 soup = BeautifulSoup(response.content, "xml")
-                items = soup.find_all("item")[:20]
+                items = soup.find_all("item")[:10]
                 
                 for item in items:
                     title = item.find("title")
                     link = item.find("link")
                     
-                    if title and link and len(articles) < count:
+                    if title and link:
                         articles.append({
                             "title": title.string,
                             "url": link.string
@@ -251,6 +311,32 @@ def fetch_top_news(count=2):
                     "url": "https://www.bbc.com/sport"
                 }
             ]
+        
+        # Extract and count topics from all articles
+        all_topics = []
+        for article in articles:
+            topics = extract_topics(article.get("title", ""))
+            all_topics.extend(topics)
+        
+        # Get the 5 most common topics
+        if all_topics:
+            topic_counts = Counter(all_topics)
+            top_5_topics = [topic for topic, count in topic_counts.most_common(5)]
+            
+            # Filter articles to keep only those with top 5 topics
+            filtered_articles = []
+            for article in articles:
+                article_topics = extract_topics(article.get("title", ""))
+                if any(topic in top_5_topics for topic in article_topics):
+                    filtered_articles.append(article)
+            
+            # If we found filtered articles, use them; otherwise use all
+            if filtered_articles:
+                articles = filtered_articles
+        
+        # Randomly select count articles from the filtered pool
+        if len(articles) > count:
+            articles = random.sample(articles, count)
         
         return articles[:count]
     except Exception as e:
@@ -291,15 +377,15 @@ def post_news_to_wall():
                 if DATABASE_URL:
                     cur = conn.cursor()
                     cur.execute(
-                        f"INSERT INTO messages (id, text, timestamp, image_url, is_ai) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})",
-                        (str(uuid.uuid4()), post_text, time.time(), None, True)
+                        f"INSERT INTO messages (id, text, timestamp, image_url, is_ai, is_news) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})",
+                        (str(uuid.uuid4()), post_text, time.time(), None, True, True)
                     )
                     conn.commit()
                     cur.close()
                 else:
                     conn.execute(
-                        f"INSERT INTO messages (id, text, timestamp, image_url, is_ai) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})",
-                        (str(uuid.uuid4()), post_text, time.time(), None, True)
+                        f"INSERT INTO messages (id, text, timestamp, image_url, is_ai, is_news) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph})",
+                        (str(uuid.uuid4()), post_text, time.time(), None, True, True)
                     )
                     conn.commit()
             except Exception as e:
@@ -402,6 +488,7 @@ def generate_image():
 
 @app.route("/messages", methods=["GET"])
 def get_messages():
+    cleanup_old_news()  # Remove news posts older than 30 minutes
     now = time.time()
     cutoff = now - MESSAGE_TTL
     conn, ph = get_db()
@@ -409,14 +496,15 @@ def get_messages():
         if DATABASE_URL:
             cur = conn.cursor()
             cur.execute(f"DELETE FROM messages WHERE timestamp < {ph}", (cutoff,))
-            cur.execute("SELECT id, text, timestamp, image_url, is_ai FROM messages ORDER BY timestamp DESC")
+            cur.execute("SELECT id, text, timestamp, image_url, is_ai, is_news FROM messages ORDER BY timestamp DESC")
             rows = cur.fetchall()
             conn.commit()
             cur.close()
             return jsonify([{
                 "id": r[0], "text": r[1], "timestamp": r[2],
                 "image_url": r[3], "is_ai": bool(r[4]) if r[4] is not None else False,
-                "expires_in": max(0, int(MESSAGE_TTL - (now - r[2])))
+                "is_news": bool(r[5]) if r[5] is not None else False,
+                "expires_in": max(0, int(1800 - (now - r[2]))) if r[5] else max(0, int(MESSAGE_TTL - (now - r[2])))
             } for r in rows])
         else:
             with conn:
@@ -425,15 +513,15 @@ def get_messages():
                 return jsonify([{
                     "id": r["id"], "text": r["text"], "timestamp": r["timestamp"],
                     "image_url": r["image_url"], "is_ai": bool(r.get("is_ai", False)),
-                    "expires_in": max(0, int(MESSAGE_TTL - (now - r["timestamp"])))
+                    "is_news": bool(r.get("is_news", False)),
+                    "expires_in": max(0, int(1800 - (now - r["timestamp"]))) if r.get("is_news") else max(0, int(MESSAGE_TTL - (now - r["timestamp"])))
                 } for r in rows])
     finally:
         conn.close()
 
 
 @app.route("/messages", methods=["POST"])
-@limiter.limit("5 per minute")
-@limiter.limit("100 per day")
+@limiter.limit("2 per hour")
 def post_message():
     data = request.json
     text = data.get("text", "").strip()
@@ -514,7 +602,7 @@ def report_message(message_id):
 
 
 @app.route("/ai-post", methods=["POST"])
-@limiter.limit("5 per minute")
+@limiter.limit("2 per hour")
 def ai_post():
     """Generate and post AI agent message to the wall"""
     if not openai_client:

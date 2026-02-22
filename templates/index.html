@@ -226,11 +226,11 @@
 
     .card {
       position: absolute;
-      width: 220px;
+      width: 280px;
       background: #1e1e1e;
       border: 1px solid #2a2a2a;
       border-radius: 12px;
-      padding: 14px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -259,9 +259,24 @@
       white-space: nowrap;
     }
 
+    .news-badge {
+      background: #5a4a2a;
+      color: #d4a574;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
     .card.ai-post {
       background: #1a2a2a;
       border-color: #2a4a4a;
+    }
+
+    .card.news-post {
+      opacity: 0.85;
+      border-style: dashed;
     }
 
     .expires { color: #7a5a2a; }
@@ -905,11 +920,15 @@
           <div class="card-meta">
             <span>${new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
             ${msg.is_ai ? '<span class="ai-badge">🤖 AI</span>' : ''}
+            ${msg.is_news ? '<span class="news-badge">📰 Temp</span>' : ''}
             <span class="expires ${soon ? "soon" : ""}">${formatExpiry(msg.expires_in)}</span>
           </div>`;
         
         if (msg.is_ai) {
           card.classList.add("ai-post");
+        }
+        if (msg.is_news) {
+          card.classList.add("news-post");
         }
         card.querySelector(".card-delete").addEventListener("click", async (e) => {
           e.stopPropagation();

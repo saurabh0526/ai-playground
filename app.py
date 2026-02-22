@@ -195,28 +195,62 @@ def is_content_abusive(text):
 
 
 def fetch_top_news(count=2):
-    """Fetch top trending news/articles from HackerNews"""
+    """Fetch top general news (politics, sports, world) from multiple sources"""
     try:
-        # Fetch top stories from HackerNews API
-        response = requests.get("https://hacker-news.firebaseio.com/v0/topstories.json", timeout=5)
-        story_ids = response.json()[:30]  # Get top 30 IDs
-        
         articles = []
-        for story_id in story_ids:
-            story_response = requests.get(
-                f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json",
-                timeout=3
-            )
-            story = story_response.json()
+        
+        # Try fetching from BBC RSS (general news)
+        try:
+            response = requests.get("http://feeds.bbc.co.uk/news/rss.xml", timeout=5)
+            soup = BeautifulSoup(response.content, "xml")
+            items = soup.find_all("item")[:20]
             
-            if story.get("url") and story.get("title"):
-                articles.append({
-                    "title": story["title"],
-                    "url": story["url"]
-                })
-            
-            if len(articles) >= count:
-                break
+            for item in items:
+                title = item.find("title")
+                link = item.find("link")
+                
+                if title and link:
+                    articles.append({
+                        "title": title.string,
+                        "url": link.string
+                    })
+                
+                if len(articles) >= count:
+                    break
+        except Exception as e:
+            print(f"BBC feed error: {e}")
+        
+        # If BBC didn't work, try Reuters
+        if len(articles) < count:
+            try:
+                response = requests.get("https://www.reutersagency.com/feed/?taxonomy=best-topics&output=rss", timeout=5)
+                soup = BeautifulSoup(response.content, "xml")
+                items = soup.find_all("item")[:20]
+                
+                for item in items:
+                    title = item.find("title")
+                    link = item.find("link")
+                    
+                    if title and link and len(articles) < count:
+                        articles.append({
+                            "title": title.string,
+                            "url": link.string
+                        })
+            except Exception as e:
+                print(f"Reuters feed error: {e}")
+        
+        # If still not enough, provide default news items
+        if len(articles) == 0:
+            articles = [
+                {
+                    "title": "Global News Updates",
+                    "url": "https://www.bbc.com/news"
+                },
+                {
+                    "title": "World Sport Headlines",
+                    "url": "https://www.bbc.com/sport"
+                }
+            ]
         
         return articles[:count]
     except Exception as e:

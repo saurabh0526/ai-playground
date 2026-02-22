@@ -641,6 +641,8 @@
           chatView.classList.add("hidden");
           wallView.classList.remove("hidden");
           loadMessages();
+          // Fetch and post top news in background
+          fetch("/fetch-news", { method: "POST" }).catch(() => {});
         } else {
           wallView.classList.add("hidden");
           chatView.classList.remove("hidden");

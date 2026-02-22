@@ -4,6 +4,7 @@ import time
 import uuid
 import sqlite3
 import requests
+import re
 from urllib.parse import urlparse
 from flask import Flask, request, jsonify, render_template
 import openai
@@ -193,9 +194,108 @@ def is_content_abusive(text):
     return False
 
 
+def fetch_top_news(count=2):
+    """Fetch top trending news/articles from HackerNews"""
+    try:
+        # Fetch top stories from HackerNews API
+        response = requests.get("https://hacker-news.firebaseio.com/v0/topstories.json", timeout=5)
+        story_ids = response.json()[:30]  # Get top 30 IDs
+        
+        articles = []
+        for story_id in story_ids:
+            story_response = requests.get(
+                f"https://hacker-news.firebaseio.com/v0/item/{story_id}.json",
+                timeout=3
+            )
+            story = story_response.json()
+            
+            if story.get("url") and story.get("title"):
+                articles.append({
+                    "title": story["title"],
+                    "url": story["url"]
+                })
+            
+            if len(articles) >= count:
+                break
+        
+        return articles[:count]
+    except Exception as e:
+        print(f"Error fetching news: {e}")
+        return []
+
+
+def post_news_to_wall():
+    """Post top news articles to wall if not already posted"""
+    try:
+        articles = fetch_top_news(2)
+        conn, ph = get_db()
+        
+        for article in articles:
+            try:
+                title = article.get("title", "")[:300]  # Limit title length
+                url = article.get("url", "")
+                
+                if not title or not url:
+                    continue
+                
+                # Check if this URL is already posted
+                if DATABASE_URL:
+                    cur = conn.cursor()
+                    cur.execute(f"SELECT id FROM messages WHERE text LIKE {ph}", (f"%{url}%",))
+                    if cur.fetchone():
+                        cur.close()
+                        continue
+                else:
+                    result = conn.execute(f"SELECT id FROM messages WHERE text LIKE {ph}", (f"%{url}%",)).fetchone()
+                    if result:
+                        continue
+                
+                # Create post text with title and URL
+                post_text = f"📰 {title}\n{url}"
+                
+                # Post to wall
+                if DATABASE_URL:
+                    cur = conn.cursor()
+                    cur.execute(
+                        f"INSERT INTO messages (id, text, timestamp, image_url, is_ai) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})",
+                        (str(uuid.uuid4()), post_text, time.time(), None, True)
+                    )
+                    conn.commit()
+                    cur.close()
+                else:
+                    conn.execute(
+                        f"INSERT INTO messages (id, text, timestamp, image_url, is_ai) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})",
+                        (str(uuid.uuid4()), post_text, time.time(), None, True)
+                    )
+                    conn.commit()
+            except Exception as e:
+                print(f"Error posting article: {e}")
+                continue
+        
+        conn.close()
+    except Exception as e:
+        print(f"Error in post_news_to_wall: {e}")
+
+
 @app.route("/")
 def index():
+    # Fetch and post top news in background
+    try:
+        post_news_to_wall()
+    except Exception as e:
+        print(f"Warning: Failed to post news on index load: {e}")
     return render_template("index.html")
+
+
+@app.route("/fetch-news", methods=["POST"])
+@limiter.limit("3 per minute")
+def fetch_news_endpoint():
+    """Endpoint to manually trigger news fetching"""
+    try:
+        post_news_to_wall()
+        return jsonify({"status": "ok", "message": "News fetched and posted"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/link-preview", methods=["POST"])

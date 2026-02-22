@@ -64,6 +64,7 @@ def init_db():
                 )
             """)
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_url TEXT")
+            cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_ai BOOLEAN DEFAULT FALSE")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS reports (
                     id TEXT PRIMARY KEY,
@@ -85,6 +86,10 @@ def init_db():
                 """)
                 try:
                     conn.execute("ALTER TABLE messages ADD COLUMN image_url TEXT")
+                except Exception:
+                    pass  # column already exists
+                try:
+                    conn.execute("ALTER TABLE messages ADD COLUMN is_ai BOOLEAN DEFAULT FALSE")
                 except Exception:
                     pass  # column already exists
                 try:
@@ -270,13 +275,13 @@ def get_messages():
         if DATABASE_URL:
             cur = conn.cursor()
             cur.execute(f"DELETE FROM messages WHERE timestamp < {ph}", (cutoff,))
-            cur.execute("SELECT id, text, timestamp, image_url FROM messages ORDER BY timestamp DESC")
+            cur.execute("SELECT id, text, timestamp, image_url, is_ai FROM messages ORDER BY timestamp DESC")
             rows = cur.fetchall()
             conn.commit()
             cur.close()
             return jsonify([{
                 "id": r[0], "text": r[1], "timestamp": r[2],
-                "image_url": r[3],
+                "image_url": r[3], "is_ai": bool(r[4]) if r[4] is not None else False,
                 "expires_in": max(0, int(MESSAGE_TTL - (now - r[2])))
             } for r in rows])
         else:
@@ -285,7 +290,7 @@ def get_messages():
                 rows = conn.execute("SELECT * FROM messages ORDER BY timestamp DESC").fetchall()
                 return jsonify([{
                     "id": r["id"], "text": r["text"], "timestamp": r["timestamp"],
-                    "image_url": r["image_url"],
+                    "image_url": r["image_url"], "is_ai": bool(r.get("is_ai", False)),
                     "expires_in": max(0, int(MESSAGE_TTL - (now - r["timestamp"])))
                 } for r in rows])
     finally:
@@ -372,6 +377,53 @@ def report_message(message_id):
     finally:
         conn.close()
     return jsonify({"status": "ok"})
+
+
+@app.route("/ai-post", methods=["POST"])
+@limiter.limit("5 per minute")
+def ai_post():
+    """Generate and post AI agent message to the wall"""
+    if not openai_client:
+        return jsonify({"error": "AI not configured"}), 503
+    
+    try:
+        # Generate an interesting post about news, tech, or general knowledge
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "user",
+                "content": "Generate a single short, interesting social media post (max 150 chars) about technology news, scientific discovery, or thought-provoking insight. Make it engaging and suitable for a public wall. No hashtags."
+            }],
+            max_tokens=50
+        )
+        
+        text = response.choices[0].message.content.strip()
+        if not text or len(text) > MAX_LENGTH:
+            text = "Did you know? Technology is evolving faster than ever. What's your take on AI?"
+        
+        # Post the AI-generated message
+        conn, ph = get_db()
+        try:
+            if DATABASE_URL:
+                cur = conn.cursor()
+                cur.execute(
+                    f"INSERT INTO messages (id, text, timestamp, image_url, is_ai) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})",
+                    (str(uuid.uuid4()), text, time.time(), None, True)
+                )
+                conn.commit()
+                cur.close()
+            else:
+                with conn:
+                    conn.execute(
+                        f"INSERT INTO messages (id, text, timestamp, image_url, is_ai) VALUES ({ph}, {ph}, {ph}, {ph}, {ph})",
+                        (str(uuid.uuid4()), text, time.time(), None, True)
+                    )
+        finally:
+            conn.close()
+        
+        return jsonify({"status": "ok", "text": text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":

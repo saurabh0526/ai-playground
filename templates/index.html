@@ -148,6 +148,15 @@
     .input-area button:hover, .post-inner button:hover { background: #1d4ed8; }
     .input-area button:disabled, .post-inner button:disabled { background: #333; cursor: not-allowed; }
 
+    #aiPostBtn {
+      background: #3a5a7f !important;
+      padding: 10px 14px !important;
+      font-size: 12px !important;
+    }
+
+    #aiPostBtn:hover { background: #4a7a9f !important; }
+    #aiPostBtn:disabled { background: #333 !important; }
+
     .loading { color: #666; font-style: italic; font-size: 13px; }
 
     /* ── Wall ── */
@@ -238,7 +247,22 @@
 
     .card-text { font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
 
-    .card-meta { font-size: 11px; color: #555; display: flex; justify-content: space-between; }
+    .card-meta { font-size: 11px; color: #555; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+
+    .ai-badge {
+      background: #2a4a7f;
+      color: #7abf9f;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .card.ai-post {
+      background: #1a2a2a;
+      border-color: #2a4a4a;
+    }
 
     .expires { color: #7a5a2a; }
     .expires.soon { color: #e05555; }
@@ -364,10 +388,32 @@
     }
 
     @media (max-width: 600px) {
-      header { padding: 10px 14px; gap: 6px; }
-      header h1 { font-size: 14px; }
-      .tab { padding: 5px 10px; font-size: 12px; }
-      .btn-clear { padding: 5px 10px; font-size: 12px; }
+      header {
+        padding: 10px 8px;
+        gap: 4px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+      }
+      header h1 { font-size: 13px; margin-right: 2px; white-space: nowrap; }
+      .tabs { gap: 4px; }
+      .tab {
+        padding: 6px 8px;
+        font-size: 11px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .btn-clear {
+        padding: 6px 8px;
+        font-size: 11px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .btn-support {
+        padding: 6px 8px;
+        font-size: 11px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
       .chat-view { padding: 12px; }
       .content-wrap { max-height: calc(100vh - 150px); }
       .input-area input { padding: 10px 14px; font-size: 16px; }
@@ -441,6 +487,7 @@
         <div class="post-footer">
           <span class="char-count" id="charCount">400 left</span>
           <button class="attach-toggle" id="wallAttachToggle" title="Attach image">📎</button>
+          <button id="aiPostBtn" title="Post AI-generated message">🤖 AI Post</button>
           <button id="postBtn">Post</button>
         </div>
       </div>
@@ -710,6 +757,7 @@
     const wallInput = document.getElementById("wallInput");
     const charCount = document.getElementById("charCount");
     const postBtn = document.getElementById("postBtn");
+    const aiPostBtn = document.getElementById("aiPostBtn");
     const wallBoard = document.getElementById("wallBoard");
 
     const cardPositions = new Map(); // id -> {x, y}
@@ -854,8 +902,13 @@
           <div class="card-text"></div>
           <div class="card-meta">
             <span>${new Date(msg.timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+            ${msg.is_ai ? '<span class="ai-badge">🤖 AI</span>' : ''}
             <span class="expires ${soon ? "soon" : ""}">${formatExpiry(msg.expires_in)}</span>
           </div>`;
+        
+        if (msg.is_ai) {
+          card.classList.add("ai-post");
+        }
         card.querySelector(".card-delete").addEventListener("click", async (e) => {
           e.stopPropagation();
           if (confirm("Delete this message?")) {
@@ -953,6 +1006,32 @@
         const data = await res.json().catch(() => ({}));
         const errorMsg = data.error || "Failed to post. Please try again.";
         postError.textContent = errorMsg;
+        postError.classList.remove("hidden");
+      }
+    });
+
+    aiPostBtn.addEventListener("click", async () => {
+      aiPostBtn.disabled = true;
+      const postError = document.getElementById("postError");
+      postError.classList.add("hidden");
+      
+      const res = await fetch("/ai-post", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      }).catch(() => null);
+      
+      aiPostBtn.disabled = false;
+      if (res && res.ok) {
+        loadMessages();
+        alert("✨ AI has posted to the wall!");
+      } else if (res) {
+        const data = await res.json().catch(() => ({}));
+        const errorMsg = data.error || "Failed to generate AI post. Please try again.";
+        postError.textContent = errorMsg;
+        postError.classList.remove("hidden");
+      } else {
+        postError.textContent = "Network error. Please try again.";
         postError.classList.remove("hidden");
       }
     });

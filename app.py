@@ -421,7 +421,7 @@ def fetch_news_endpoint():
 @app.route("/link-preview", methods=["POST"])
 @limiter.limit("10 per minute")
 def link_preview():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     url = data.get("url", "").strip()
     if not url:
         return jsonify({"error": "No URL provided"}), 400
@@ -433,7 +433,7 @@ def link_preview():
 @app.route("/chat/gpt", methods=["POST"])
 @limiter.limit("30 per minute")
 def chat_gpt():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     message = data.get("message", "").strip()
     if not message:
         return jsonify({"error": "No message provided"}), 400
@@ -467,7 +467,7 @@ def clear():
 @app.route("/image/generate", methods=["POST"])
 @limiter.limit("5 per minute")
 def generate_image():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     prompt = data.get("prompt", "").strip()
     if not prompt:
         return jsonify({"error": "No prompt provided"}), 400
@@ -521,9 +521,9 @@ def get_messages():
 
 
 @app.route("/messages", methods=["POST"])
-@limiter.limit("2 per hour")
+@limiter.limit("10 per minute")
 def post_message():
-    data = request.json
+    data = request.get_json(silent=True) or {}
     text = data.get("text", "").strip()
     if not text:
         return jsonify({"error": "Message is empty"}), 400
